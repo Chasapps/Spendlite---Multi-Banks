@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>SpendLite V1</title>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="catpicker-modal.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>SpendLite V1</h1>
+    <div class="header-actions">
+      <a class="btn-adv" href="advanced.html">Advanced →</a>
+      <button id="closeAppBtn" class="btn-close">✕ Close</button>
+    </div>
+  </header>
+
+  <div id="saveStatus" class="save-status" style="display:none;"></div>
+
+  <main>
+    <section class="card">
+      <h2>1) Load Transactions</h2>
+      <div class="btn-row">
+        <input type="file" id="csvFile" accept=".csv">
+        <input type="file" id="pdfFile" accept="application/pdf">
+      </div>
+      <p class="tip">
+        CSV: Qudos / bank exports<br>
+        PDF: Westpac statements
+      </p>
+    </section>
+  </main>
+
+  <footer class="app-footer">Made with ♥ for bright, jolly spreadsheets</footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="script.js"></script>
+  <script src="catpicker-modal.js"></script>
+</body>
+</html>

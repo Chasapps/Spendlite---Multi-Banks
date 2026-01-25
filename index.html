@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
   <title>SpendLite V1</title>
-
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="catpicker-modal.css">
 </head>
@@ -22,14 +21,17 @@
   <main>
     <section class="card">
       <h2>1) Load Transactions</h2>
-      <div class="btn-row">
+      <div class="app-controls">
         <input type="file" id="csvFile" accept=".csv">
         <input type="file" id="pdfFile" accept="application/pdf">
+        <div class="filters">
+          <label for="monthFilter">Filter by Month:</label>
+          <select id="monthFilter">
+            <option value="">All months</option>
+          </select>
+          <button id="clearMonthBtn" class="secondary small">Clear</button>
+        </div>
       </div>
-      <p class="tip">
-        CSV: Qudos / bank exports<br>
-        PDF: Westpac statements
-      </p>
     </section>
   </main>
 

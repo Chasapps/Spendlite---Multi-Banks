@@ -1105,7 +1105,6 @@ function parseWestpacPdfText(text) {
   const txns = [];
 
   for (const line of lines) {
-    // Match: "21 Jan 2026 <description> $123.45" OR "-$123.45"
     const m = line.match(
       /^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(.+?)\s+(-?\$?\d+\.\d{2})$/
     );
@@ -1115,7 +1114,7 @@ function parseWestpacPdfText(text) {
     const description = m[2];
     let amount = parseAmount(m[3]);
 
-    // Deposits (positive numbers) should reduce spend
+    // Deposits reduce spend
     if (!m[3].startsWith('-')) {
       amount = -Math.abs(amount);
     }
@@ -1127,12 +1126,39 @@ function parseWestpacPdfText(text) {
 }
 
 
+ // ============================================================================
+// OPTIONAL: WESTPAC PDF IMPORT (STABLE VERSION)
+// ============================================================================
+
+(function () {
+  const pdfInput = document.getElementById('pdfFile');
+  if (!pdfInput) return;
+
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      const text = await readPdfText(file);
+      // Ensure pdfjsLib is ready
+      if (!window.pdfjsLib) {
+        throw new Error('pdfjsLib not loaded');
+      }
+
+      // Set worker ONLY when needed
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+      let text = '';
+
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        text += content.items.map(it => it.str).join(' ') + '\n';
+      }
+
       const txns = parseWestpacPdfText(text);
 
       if (!txns.length) {
@@ -1140,14 +1166,14 @@ function parseWestpacPdfText(text) {
         return;
       }
 
-      // Hand off to existing SpendLite pipeline
       CURRENT_TXNS = txns;
       saveTxnsToLocalStorage();
       rebuildMonthDropdown();
       applyRulesAndRender();
+
     } catch (err) {
       console.error('PDF import failed:', err);
-      alert('Failed to read PDF file.');
+      alert('Failed to read PDF file');
     }
   });
 })();

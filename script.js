@@ -1053,3 +1053,80 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeBtn = document.getElementById('closeAppBtn');
   if (closeBtn) closeBtn.addEventListener('click', handleCloseApp);
 });
+// ============================================================================
+// OPTIONAL: WESTPAC PDF IMPORT (SAFE, GUARDED)
+// ============================================================================
+
+(function () {
+  // Guard: do nothing if PDF input or PDF.js is missing
+  const pdfInput = document.getElementById('pdfFile');
+  if (!pdfInput || !window.pdfjsLib) return;
+
+  // REQUIRED: PDF.js worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  async function readPdfText(file) {
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    let text = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(it => it.str).join(' ') + '\n';
+    }
+    return text;
+  }
+
+  function parseWestpacPdfText(text) {
+    const lines = text
+      .split(/\n+/)
+      .map(l => l.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+
+    const txns = [];
+
+    for (const line of lines) {
+      const m = line.match(
+        /^(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\s+(.+?)\s+([-+]?[$]?\d+[.,]\d{2})$/
+      );
+      if (!m) continue;
+
+      const date = m[1];
+      const description = m[2];
+      let amount = parseAmount(m[3]);
+
+      // Westpac credits appear positive → treat as negative spend
+      if (!m[3].includes('-')) amount = -Math.abs(amount);
+
+      txns.push({ date, amount, description });
+    }
+
+    return txns;
+  }
+
+  pdfInput.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await readPdfText(file);
+      const txns = parseWestpacPdfText(text);
+
+      if (!txns.length) {
+        alert('No transactions found in PDF (expected Westpac statement).');
+        return;
+      }
+
+      // Hand off to existing SpendLite pipeline
+      CURRENT_TXNS = txns;
+      saveTxnsToLocalStorage();
+      rebuildMonthDropdown();
+      applyRulesAndRender();
+    } catch (err) {
+      console.error('PDF import failed:', err);
+      alert('Failed to read PDF file.');
+    }
+  });
+})();

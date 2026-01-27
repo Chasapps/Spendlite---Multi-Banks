@@ -1079,32 +1079,51 @@ document.addEventListener('DOMContentLoaded', () => {
     return text;
   }
 
-  function parseWestpacPdfText(text) {
-    const lines = text
-      .split(/\n+/)
-      .map(l => l.replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
+function parseWestpacPdfText(text) {
+  const lines = text
+    .split(/\n+/)
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
 
-    const txns = [];
+  const txns = [];
 
-    for (const line of lines) {
-      const m = line.match(
-        /^(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\s+(.+?)\s+([-+]?[$]?\d+[.,]\d{2})$/
-      );
-      if (!m) continue;
+  let curDate = null;
+  let curDesc = [];
 
-      const date = m[1];
-      const description = m[2];
-      let amount = parseAmount(m[3]);
-
-      // Westpac credits appear positive → treat as negative spend
-      if (!m[3].includes('-')) amount = -Math.abs(amount);
-
-      txns.push({ date, amount, description });
+  for (const line of lines) {
+    // Date line: "21 Jan 2026"
+    if (/^\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}$/.test(line)) {
+      curDate = line;
+      curDesc = [];
+      continue;
     }
 
-    return txns;
+    // Amount line: "$72.75" or "-$72.75"
+    if (/^[-+]?\$?\d+[.,]\d{2}$/.test(line) && curDate) {
+      let amount = parseAmount(line);
+
+      // Westpac credits appear positive → treat as negative spend
+      if (!line.includes('-')) amount = -Math.abs(amount);
+
+      txns.push({
+        date: curDate,
+        description: curDesc.join(' ').trim(),
+        amount
+      });
+
+      curDate = null;
+      curDesc = [];
+      continue;
+    }
+
+    // Description lines
+    if (curDate) {
+      curDesc.push(line);
+    }
   }
+
+  return txns;
+}
 
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];

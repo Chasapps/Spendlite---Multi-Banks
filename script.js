@@ -1066,43 +1066,53 @@ document.addEventListener('DOMContentLoaded', () => {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  async function readPdfText(file) {
-    const buffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-    let text = '';
+async function readPdfText(file) {
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      text += content.items.map(it => it.str).join(' ') + '\n';
+  let lines = [];
+
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+
+    const byY = {};
+
+    for (const it of content.items) {
+      const y = Math.round(it.transform[5]); // vertical position
+      if (!byY[y]) byY[y] = [];
+      byY[y].push(it.str);
     }
-    return text;
+
+    // Sort lines top-to-bottom (PDF Y coords are inverted)
+    const pageLines = Object.keys(byY)
+      .sort((a, b) => b - a)
+      .map(y => byY[y].join(' ').replace(/\s+/g, ' ').trim());
+
+    lines.push(...pageLines);
   }
 
-function parseWestpacPdfText(text) {
-  const lines = text
-    .split(/\n+/)
-    .map(l => l.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
+  return lines;
+}
 
+
+function parseWestpacPdfText(lines) {
   const txns = [];
 
   let curDate = null;
   let curDesc = [];
 
   for (const line of lines) {
-    // Date line: "21 Jan 2026"
+    // Date line
     if (/^\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}$/.test(line)) {
       curDate = line;
       curDesc = [];
       continue;
     }
 
-    // Amount line: "$72.75" or "-$72.75"
+    // Amount line
     if (/^[-+]?\$?\d+[.,]\d{2}$/.test(line) && curDate) {
       let amount = parseAmount(line);
-
-      // Westpac credits appear positive → treat as negative spend
       if (!line.includes('-')) amount = -Math.abs(amount);
 
       txns.push({
@@ -1130,8 +1140,8 @@ function parseWestpacPdfText(text) {
     if (!file) return;
 
     try {
-      const text = await readPdfText(file);
-      const txns = parseWestpacPdfText(text);
+      const lines = await readPdfText(file);
+      const txns = parseWestpacPdfText(lines);
 
       if (!txns.length) {
         alert('No transactions found in PDF (expected Westpac statement).');

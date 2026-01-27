@@ -1096,52 +1096,44 @@ async function readPdfText(file) {
 }
 
 
-function parseWestpacPdfText(lines) {
+function parseWestpacPdfText(text) {
+  const lines = text
+    .split(/\n+/)
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
   const txns = [];
 
-  let curDate = null;
-  let curDesc = [];
-
   for (const line of lines) {
-    // Date line
-    if (/^\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}$/.test(line)) {
-      curDate = line;
-      curDesc = [];
-      continue;
+    // Match: "21 Jan 2026 <description> $123.45" OR "-$123.45"
+    const m = line.match(
+      /^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(.+?)\s+(-?\$?\d+\.\d{2})$/
+    );
+    if (!m) continue;
+
+    const date = m[1];
+    const description = m[2];
+    let amount = parseAmount(m[3]);
+
+    // Deposits (positive numbers) should reduce spend
+    if (!m[3].startsWith('-')) {
+      amount = -Math.abs(amount);
     }
 
-    // Amount line
-    if (/^[-+]?\$?\d+[.,]\d{2}$/.test(line) && curDate) {
-      let amount = parseAmount(line);
-      if (!line.includes('-')) amount = -Math.abs(amount);
-
-      txns.push({
-        date: curDate,
-        description: curDesc.join(' ').trim(),
-        amount
-      });
-
-      curDate = null;
-      curDesc = [];
-      continue;
-    }
-
-    // Description lines
-    if (curDate) {
-      curDesc.push(line);
-    }
+    txns.push({ date, description, amount });
   }
 
   return txns;
 }
+
 
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      const lines = await readPdfText(file);
-      const txns = parseWestpacPdfText(lines);
+      const text = await readPdfText(file);
+      const txns = parseWestpacPdfText(text);
 
       if (!txns.length) {
         alert('No transactions found in PDF (expected Westpac statement).');

@@ -1097,6 +1097,16 @@ async function readPdfText(file) {
   return lines;
 }
 
+function normalisePdfDate(d) {
+  // "21 Jan 2026" → "2026-01-21"
+  const [day, mon, year] = d.split(' ');
+  const months = {
+    Jan: '01', Feb: '02', Mar: '03', Apr: '04',
+    May: '05', Jun: '06', Jul: '07', Aug: '08',
+    Sep: '09', Oct: '10', Nov: '11', Dec: '12'
+  };
+  return `${year}-${months[mon]}-${day.padStart(2, '0')}`;
+}
 
 function parseWestpacPdfText(text) {
   const lines = text
@@ -1112,7 +1122,8 @@ function parseWestpacPdfText(text) {
     );
     if (!m) continue;
 
-    const date = m[1];
+    const date = normalisePdfDate(m[1]);
+
     const description = m[2];
     let amount = parseAmount(m[3]);
 

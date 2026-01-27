@@ -1115,3 +1115,69 @@ document.getElementById('pdfFile')?.addEventListener('change', async (e) => {
     alert('Failed to read PDF');
   }
 });
+// ============================================================================
+// WESTPAC PDF IMPORT
+// ============================================================================
+
+// REQUIRED: PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+async function readPdfText(file) {
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it => it.str).join(' ') + '\\n';
+  }
+  return text;
+}
+
+function parseWestpacPdfText(text) {
+  const lines = text
+    .split(/\\n+/)
+    .map(l => l.replace(/\\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  const txns = [];
+
+  for (const line of lines) {
+    const m = line.match(/^(\\d{1,2}\\s+[A-Za-z]{3,9}\\s+\\d{4})\\s+(.+?)\\s+([-+]?\\$?\\d+[.,]\\d{2})$/);
+    if (!m) continue;
+
+    const date = m[1];
+    const description = m[2];
+    let amount = parseAmount(m[3]);
+
+    if (!m[3].includes('-')) amount = -Math.abs(amount);
+
+    txns.push({ date, amount, description });
+  }
+
+  return txns;
+}
+
+function loadPdfTxns(txns) {
+  CURRENT_TXNS = txns;
+  saveTxnsToLocalStorage();
+  rebuildMonthDropdown();
+  applyRulesAndRender();
+}
+
+document.getElementById('pdfFile')?.addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await readPdfText(file);
+    const txns = parseWestpacPdfText(text);
+    if (!txns.length) return alert('No transactions found in PDF');
+    loadPdfTxns(txns);
+  } catch (err) {
+    console.error(err);
+    alert('Failed to read PDF');
+  }
+});
+

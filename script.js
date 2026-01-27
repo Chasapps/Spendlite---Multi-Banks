@@ -1068,6 +1068,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function readPdfText(file) {
   const buffer = await file.arrayBuffer();
+  pdfjsLib.disableWorker = true;
+
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
   let lines = [];
@@ -1130,24 +1132,22 @@ function parseWestpacPdfText(text) {
 // OPTIONAL: WESTPAC PDF IMPORT (STABLE VERSION)
 // ============================================================================
 
+// ============================================================================
+// WESTPAC PDF IMPORT (NO WORKER — GITHUB PAGES SAFE)
+// ============================================================================
+
 (function () {
   const pdfInput = document.getElementById('pdfFile');
-  if (!pdfInput) return;
+  if (!pdfInput || !window.pdfjsLib) return;
+
+  // 🔑 Critical fix
+  pdfjsLib.disableWorker = true;
 
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      // Ensure pdfjsLib is ready
-      if (!window.pdfjsLib) {
-        throw new Error('pdfjsLib not loaded');
-      }
-
-      // Set worker ONLY when needed
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
       const buffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
@@ -1162,7 +1162,7 @@ function parseWestpacPdfText(text) {
       const txns = parseWestpacPdfText(text);
 
       if (!txns.length) {
-        alert('No transactions found in PDF (expected Westpac statement).');
+        alert('No transactions found in PDF');
         return;
       }
 

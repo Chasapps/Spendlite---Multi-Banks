@@ -1074,46 +1074,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${year}-${months[mon]}-${day.padStart(2,'0')}`;
   }
 
-  function parseWestpacPdfText(text) {
-    const lines = text
-      .split(/\n+/)
-      .map(l => l.replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
-
-    const txns = [];
-    let curDate = null;
-    let curDesc = [];
-
-    for (const line of lines) {
-      if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}/.test(line)) {
-        curDate = normalisePdfDate(line.slice(0, 11));
-        curDesc = [line.slice(12).trim()];
-        continue;
-      }
-
-      if (/^-?\d+\.\d{2}$/.test(line) && curDate) {
-        let amount = parseAmount(line);
-        if (!line.startsWith('-')) amount = -Math.abs(amount);
-
-        txns.push({
-          date: curDate,
-          description: curDesc.join(' ').trim(),
-          amount
-        });
-
-        curDate = null;
-        curDesc = [];
-        continue;
-      }
-
-      if (curDate) {
-        curDesc.push(line);
-      }
-    }
-
-    return txns;
-  }
-
+ 
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;

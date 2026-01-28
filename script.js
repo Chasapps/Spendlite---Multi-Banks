@@ -1156,7 +1156,11 @@ if (!txns.length) {
   return;
 }
 
-      CURRENT_TXNS = txns;
+      CURRENT_TXNS = txns.map(t => ({
+      ...t,
+        amount: Math.abs(t.amount)
+      }));
+
       saveTxnsToLocalStorage();
       rebuildMonthDropdown();
       applyRulesAndRender();

@@ -1116,23 +1116,39 @@ function parseWestpacPdfText(text) {
 
   const txns = [];
 
+  let curDate = null;
+  let curDesc = [];
+
   for (const line of lines) {
-    const m = line.match(
-      /^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(.+?)\s+(-?\$?\d+\.\d{2})$/
-    );
-    if (!m) continue;
-
-    const date = normalisePdfDate(m[1]);
-
-    const description = m[2];
-    let amount = parseAmount(m[3]);
-
-    // Deposits reduce spend
-    if (!m[3].startsWith('-')) {
-      amount = -Math.abs(amount);
+    // Date at start of transaction
+    if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}/.test(line)) {
+      curDate = normalisePdfDate(line.slice(0, 11)); // "21 Jan 2026"
+      curDesc = [line.slice(12).trim()];
+      continue;
     }
 
-    txns.push({ date, description, amount });
+    // Amount line (e.g. 2666.00 or -158.62)
+    if (/^-?\d+\.\d{2}$/.test(line) && curDate) {
+      let amount = parseAmount(line);
+
+      // Westpac deposits reduce spend
+      if (!line.startsWith('-')) amount = -Math.abs(amount);
+
+      txns.push({
+        date: curDate,
+        description: curDesc.join(' ').trim(),
+        amount
+      });
+
+      curDate = null;
+      curDesc = [];
+      continue;
+    }
+
+    // Continuation of description
+    if (curDate) {
+      curDesc.push(line);
+    }
   }
 
   return txns;

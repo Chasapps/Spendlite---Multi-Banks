@@ -1073,6 +1073,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     return `${year}-${months[mon]}-${day.padStart(2,'0')}`;
   }
+    // 1️⃣ helper
+function normalisePdfDate(d) { ... }
 function parseWestpacPdfText(text) {
   const lines = text
     .split(/\n+/)

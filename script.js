@@ -1097,12 +1097,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2️⃣ Amount line (standalone)
     const amtMatch = line.match(/^-?\$?\d+\.\d{2}$/);
     if (amtMatch && curDate) {
-      let amount = parseAmount(line);
-
-      // Deposits reduce spend
-      if (!line.startsWith('-')) {
-        amount = -Math.abs(amount);
-      }
+      let amount = Math.abs(parseAmount(line));
 
      const description = curDesc.join(' ').trim();
 

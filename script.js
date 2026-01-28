@@ -1144,12 +1144,16 @@ document.addEventListener('DOMContentLoaded', () => {
         text += content.items.map(it => it.str).join('\n') + '\n';
       }
 
-      const txns = parseWestpacPdfText(text);
+    console.log('=== PDF TEXT START ===');
+console.log(text.slice(0, 2000));
+console.log('=== PDF TEXT END ===');
 
-      if (!txns.length) {
-        alert('No transactions found in PDF');
-        return;
-      }
+const txns = parseWestpacPdfText(text);
+
+if (!txns.length) {
+  alert('No transactions found in PDF');
+  return;
+}
 
       CURRENT_TXNS = txns;
       saveTxnsToLocalStorage();

@@ -1073,59 +1073,52 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     return `${year}-${months[mon]}-${day.padStart(2,'0')}`;
   }
-    // 1️⃣ helper
-function normalisePdfDate(d) { ... }
-function parseWestpacPdfText(text) {
-  const lines = text
-    .split(/\n+/)
-    .map(l => l.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
 
-  const txns = [];
+  function parseWestpacPdfText(text) {
+    const lines = text
+      .split(/\n+/)
+      .map(l => l.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
 
-  let curDate = null;
-  let curDesc = null;
+    const txns = [];
+    let curDate = null;
+    let curDesc = null;
 
-  for (const line of lines) {
-    // Date + description (start of row)
-    const dateMatch = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(.*)$/);
-    if (dateMatch) {
-      curDate = normalisePdfDate(dateMatch[1]);
-      curDesc = dateMatch[2].trim();
-      continue;
-    }
-
-    // Amount cell (withdrawal or deposit)
-    const amtMatch = line.match(/(-?\$?\d+\.\d{2})$/);
-    if (amtMatch && curDate) {
-      let amount = parseAmount(amtMatch[1]);
-
-      // Deposits reduce spend
-      if (!amtMatch[1].includes('-')) {
-        amount = -Math.abs(amount);
+    for (const line of lines) {
+      const dateMatch = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(.*)$/);
+      if (dateMatch) {
+        curDate = normalisePdfDate(dateMatch[1]);
+        curDesc = dateMatch[2].trim();
+        continue;
       }
 
-      txns.push({
-        date: curDate,
-        description: curDesc || line,
-        amount
-      });
+      const amtMatch = line.match(/(-?\$?\d+\.\d{2})/);
+      if (amtMatch && curDate) {
+        let amount = parseAmount(amtMatch[1]);
+        if (!amtMatch[1].includes('-')) {
+          amount = -Math.abs(amount);
+        }
 
-      curDate = null;
-      curDesc = null;
+        txns.push({
+          date: curDate,
+          description: curDesc,
+          amount
+        });
+
+        curDate = null;
+        curDesc = null;
+      }
     }
+
+    return txns;
   }
 
-  return txns;
-}
-
- 
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      const buffer = await file.arrayBuffer();
+      const buffer = new Uint8Array(await file.arrayBuffer());
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
       let text = '';

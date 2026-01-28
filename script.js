@@ -1073,6 +1073,49 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     return `${year}-${months[mon]}-${day.padStart(2,'0')}`;
   }
+function parseWestpacPdfText(text) {
+  const lines = text
+    .split(/\n+/)
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  const txns = [];
+
+  let curDate = null;
+  let curDesc = null;
+
+  for (const line of lines) {
+    // Date + description (start of row)
+    const dateMatch = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(.*)$/);
+    if (dateMatch) {
+      curDate = normalisePdfDate(dateMatch[1]);
+      curDesc = dateMatch[2].trim();
+      continue;
+    }
+
+    // Amount cell (withdrawal or deposit)
+    const amtMatch = line.match(/(-?\$?\d+\.\d{2})$/);
+    if (amtMatch && curDate) {
+      let amount = parseAmount(amtMatch[1]);
+
+      // Deposits reduce spend
+      if (!amtMatch[1].includes('-')) {
+        amount = -Math.abs(amount);
+      }
+
+      txns.push({
+        date: curDate,
+        description: curDesc || line,
+        amount
+      });
+
+      curDate = null;
+      curDesc = null;
+    }
+  }
+
+  return txns;
+}
 
  
   pdfInput.addEventListener('change', async (e) => {

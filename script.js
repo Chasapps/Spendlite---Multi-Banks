@@ -1053,122 +1053,66 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeBtn = document.getElementById('closeAppBtn');
   if (closeBtn) closeBtn.addEventListener('click', handleCloseApp);
 });
-// ============================================================================
-// OPTIONAL: WESTPAC PDF IMPORT (SAFE, GUARDED)
-// ============================================================================
-
-(function () {
-  // Guard: do nothing if PDF input or PDF.js is missing
-  const pdfInput = document.getElementById('pdfFile');
-  if (!pdfInput || !window.pdfjsLib) return;
-
-  // REQUIRED: PDF.js worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-async function readPdfText(file) {
-  const buffer = await file.arrayBuffer();
-  pdfjsLib.disableWorker = true;
-
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-
-  let lines = [];
-
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const page = await pdf.getPage(p);
-    const content = await page.getTextContent();
-
-    const byY = {};
-
-    for (const it of content.items) {
-      const y = Math.round(it.transform[5]); // vertical position
-      if (!byY[y]) byY[y] = [];
-      byY[y].push(it.str);
-    }
-
-    // Sort lines top-to-bottom (PDF Y coords are inverted)
-    const pageLines = Object.keys(byY)
-      .sort((a, b) => b - a)
-      .map(y => byY[y].join(' ').replace(/\s+/g, ' ').trim());
-
-    lines.push(...pageLines);
-  }
-
-  return lines;
-}
-
-function normalisePdfDate(d) {
-  // "21 Jan 2026" → "2026-01-21"
-  const [day, mon, year] = d.split(' ');
-  const months = {
-    Jan: '01', Feb: '02', Mar: '03', Apr: '04',
-    May: '05', Jun: '06', Jul: '07', Aug: '08',
-    Sep: '09', Oct: '10', Nov: '11', Dec: '12'
-  };
-  return `${year}-${months[mon]}-${day.padStart(2, '0')}`;
-}
-
-function parseWestpacPdfText(text) {
-  const lines = text
-    .split(/\n+/)
-    .map(l => l.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
-
-  const txns = [];
-
-  let curDate = null;
-  let curDesc = [];
-
-  for (const line of lines) {
-    // Date at start of transaction
-    if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}/.test(line)) {
-      curDate = normalisePdfDate(line.slice(0, 11)); // "21 Jan 2026"
-      curDesc = [line.slice(12).trim()];
-      continue;
-    }
-
-    // Amount line (e.g. 2666.00 or -158.62)
-    if (/^-?\d+\.\d{2}$/.test(line) && curDate) {
-      let amount = parseAmount(line);
-
-      // Westpac deposits reduce spend
-      if (!line.startsWith('-')) amount = -Math.abs(amount);
-
-      txns.push({
-        date: curDate,
-        description: curDesc.join(' ').trim(),
-        amount
-      });
-
-      curDate = null;
-      curDesc = [];
-      continue;
-    }
-
-    // Continuation of description
-    if (curDate) {
-      curDesc.push(line);
-    }
-  }
-
-  return txns;
-}
-
-
- // ============================================================================
-// OPTIONAL: WESTPAC PDF IMPORT (STABLE VERSION)
-// ============================================================================
 
 // ============================================================================
-// WESTPAC PDF IMPORT (NO WORKER — GITHUB PAGES SAFE)
+// WESTPAC PDF IMPORT (FINAL, SINGLE PATH, WORKING)
 // ============================================================================
 
 (function () {
   const pdfInput = document.getElementById('pdfFile');
   if (!pdfInput || !window.pdfjsLib) return;
 
-  // 🔑 Critical fix
   pdfjsLib.disableWorker = true;
+
+  function normalisePdfDate(d) {
+    const [day, mon, year] = d.split(' ');
+    const months = {
+      Jan:'01', Feb:'02', Mar:'03', Apr:'04',
+      May:'05', Jun:'06', Jul:'07', Aug:'08',
+      Sep:'09', Oct:'10', Nov:'11', Dec:'12'
+    };
+    return `${year}-${months[mon]}-${day.padStart(2,'0')}`;
+  }
+
+  function parseWestpacPdfText(text) {
+    const lines = text
+      .split(/\n+/)
+      .map(l => l.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+
+    const txns = [];
+    let curDate = null;
+    let curDesc = [];
+
+    for (const line of lines) {
+      if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}/.test(line)) {
+        curDate = normalisePdfDate(line.slice(0, 11));
+        curDesc = [line.slice(12).trim()];
+        continue;
+      }
+
+      if (/^-?\d+\.\d{2}$/.test(line) && curDate) {
+        let amount = parseAmount(line);
+        if (!line.startsWith('-')) amount = -Math.abs(amount);
+
+        txns.push({
+          date: curDate,
+          description: curDesc.join(' ').trim(),
+          amount
+        });
+
+        curDate = null;
+        curDesc = [];
+        continue;
+      }
+
+      if (curDate) {
+        curDesc.push(line);
+      }
+    }
+
+    return txns;
+  }
 
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
@@ -1179,11 +1123,10 @@ function parseWestpacPdfText(text) {
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
       let text = '';
-
       for (let p = 1; p <= pdf.numPages; p++) {
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
-        text += content.items.map(it => it.str).join(' ') + '\n';
+        text += content.items.map(it => it.str).join('\n') + '\n';
       }
 
       const txns = parseWestpacPdfText(text);

@@ -1077,57 +1077,54 @@ document.addEventListener('DOMContentLoaded', () => {
   function parseWestpacPdfText(text) {
   const lines = text
     .split(/\n+/)
-    .map(l => l.replace(/\s+/g, ' ').trim())
+    .map(l => l.trim())
     .filter(Boolean);
 
   const txns = [];
+
   let curDate = null;
-  let curDescParts = [];
+  let curDesc = [];
 
   for (const line of lines) {
-    // Ignore table headers
-    if (/^(date|description|withdrawal|deposit)$/i.test(line)) {
-      continue;
-    }
-
-    // 1️⃣ Date starts a transaction
+    // 1️⃣ Date line (standalone)
     const dateMatch = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})$/);
     if (dateMatch) {
       curDate = normalisePdfDate(dateMatch[1]);
-      curDescParts = [];
+      curDesc = [];
       continue;
     }
 
-    // 2️⃣ Amount ends a transaction (anywhere in line)
-    const amtMatch = line.match(/(-?\$?\d+\.\d{2})/);
+    // 2️⃣ Amount line (standalone)
+    const amtMatch = line.match(/^-?\$?\d+\.\d{2}$/);
     if (amtMatch && curDate) {
-      let amount = parseAmount(amtMatch[1]);
+      let amount = parseAmount(line);
 
       // Deposits reduce spend
-      if (!amtMatch[1].includes('-')) {
+      if (!line.startsWith('-')) {
         amount = -Math.abs(amount);
       }
 
       txns.push({
         date: curDate,
-        description: curDescParts.join(' ').trim(),
+        description: curDesc.join(' ').trim(),
         amount
       });
 
       curDate = null;
-      curDescParts = [];
+      curDesc = [];
       continue;
     }
 
-    // 3️⃣ Description lines (everything between date and amount)
+    // 3️⃣ Description lines (between date and amount)
     if (curDate) {
-      curDescParts.push(line);
+      // Skip table headers / junk
+      if (/^(withdrawal|deposit|date|description)$/i.test(line)) continue;
+      curDesc.push(line);
     }
   }
 
   return txns;
 }
-
 
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];

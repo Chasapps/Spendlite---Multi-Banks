@@ -1104,11 +1104,20 @@ document.addEventListener('DOMContentLoaded', () => {
         amount = -Math.abs(amount);
       }
 
-      txns.push({
-        date: curDate,
-        description: curDesc.join(' ').trim(),
-        amount
-      });
+     const description = curDesc.join(' ').trim();
+
+// Skip repayments / payments
+  if (/^PAYMENT[- ]BPAY/i.test(description)) {
+    curDate = null;
+    curDesc = [];
+    continue;
+  }
+
+  txns.push({
+    date: curDate,
+    description,
+    amount
+  });
 
       curDate = null;
       curDesc = [];

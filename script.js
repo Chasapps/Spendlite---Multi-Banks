@@ -1075,43 +1075,59 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function parseWestpacPdfText(text) {
-    const lines = text
-      .split(/\n+/)
-      .map(l => l.replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
+  const lines = text
+    .split(/\n+/)
+    .map(l => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
 
-    const txns = [];
-    let curDate = null;
-    let curDesc = null;
+  const txns = [];
+  let curDate = null;
+  let curDescParts = [];
 
-    for (const line of lines) {
-      const dateMatch = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(.*)$/);
-      if (dateMatch) {
-        curDate = normalisePdfDate(dateMatch[1]);
-        curDesc = dateMatch[2].trim();
-        continue;
-      }
-
-      const amtMatch = line.match(/(-?\$?\d+\.\d{2})/);
-      if (amtMatch && curDate) {
-        let amount = parseAmount(amtMatch[1]);
-        if (!amtMatch[1].includes('-')) {
-          amount = -Math.abs(amount);
-        }
-
-        txns.push({
-          date: curDate,
-          description: curDesc,
-          amount
-        });
-
-        curDate = null;
-        curDesc = null;
-      }
+  for (const line of lines) {
+    // Ignore table headers
+    if (/^(date|description|withdrawal|deposit)$/i.test(line)) {
+      continue;
     }
 
-    return txns;
+    // 1️⃣ Date starts a transaction
+    const dateMatch = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})$/);
+    if (dateMatch) {
+      curDate = normalisePdfDate(dateMatch[1]);
+      curDescParts = [];
+      continue;
+    }
+
+    // 2️⃣ Amount ends a transaction (anywhere in line)
+    const amtMatch = line.match(/(-?\$?\d+\.\d{2})/);
+    if (amtMatch && curDate) {
+      let amount = parseAmount(amtMatch[1]);
+
+      // Deposits reduce spend
+      if (!amtMatch[1].includes('-')) {
+        amount = -Math.abs(amount);
+      }
+
+      txns.push({
+        date: curDate,
+        description: curDescParts.join(' ').trim(),
+        amount
+      });
+
+      curDate = null;
+      curDescParts = [];
+      continue;
+    }
+
+    // 3️⃣ Description lines (everything between date and amount)
+    if (curDate) {
+      curDescParts.push(line);
+    }
   }
+
+  return txns;
+}
+
 
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];

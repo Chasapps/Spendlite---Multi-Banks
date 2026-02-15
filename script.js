@@ -269,19 +269,40 @@ function getFirstTxnMonth(txns = CURRENT_TXNS) {
 * Safety: Ignore rows with missing fields; never throw.
 */
 function loadCsvText(csvText) {
-  const rows = Papa.parse(csvText.trim(), { skipEmptyLines: true }).data;
-  const startIdx = rows.length && isNaN(parseAmount(rows[0][COL.DEBIT])) ? 1 : 0;
+  const parsed = Papa.parse(csvText.trim(), {
+    header: true,
+    skipEmptyLines: true
+  });
+
+  const rows = parsed.data;
+  const headers = parsed.meta.fields || [];
+
+  // Detect columns dynamically
+  const dateField = headers.find(h => /effective date/i.test(h)) || headers[2];
+  const debitField = headers.find(h => /debit amount/i.test(h)) || headers[5];
+  const descField =
+    headers.find(h => /long description/i.test(h)) ||
+    headers.find(h => /^description$/i.test(h)) ||
+    headers[9];
+
   const txns = [];
-  for (let i = startIdx; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r || r.length < 10) continue;
-    const effectiveDate = r[COL.DATE] || '';
-    const debit = parseAmount(r[COL.DEBIT]);
-    const longDesc = (r[COL.LONGDESC] || '').trim();
+
+  for (const r of rows) {
+    if (!r) continue;
+
+    const effectiveDate = r[dateField] || '';
+    const debit = parseAmount(r[debitField]);
+    const longDesc = (r[descField] || '').trim();
+
     if ((effectiveDate || longDesc) && Number.isFinite(debit) && debit !== 0) {
-       txns.push({ date: effectiveDate, amount: debit, description: longDesc });
+      txns.push({
+        date: effectiveDate,
+        amount: debit,
+        description: longDesc
+      });
     }
   }
+
   CURRENT_TXNS = txns;
   saveTxnsToLocalStorage();
   try { updateMonthBanner(); } catch {}

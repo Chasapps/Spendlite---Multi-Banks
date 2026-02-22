@@ -1102,45 +1102,61 @@ function parseWestpacPdfText(text) {
     .filter(Boolean);
 
   const descriptions = [];
-  const transactions = [];
+  const dateAmountLines = [];
 
-  // 1️⃣ Collect descriptions (before the transaction table)
+  // Step 1 — collect all description lines
   for (const line of lines) {
-    if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{2}\s+[\d,]+\.\d{2}/.test(line)) break;
-    if (/^[A-Z0-9].{3,}/.test(line) &&
-        !/statement|account|westpac|balance|minimum/i.test(line)) {
+    if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{2}\s+[\d,]+\.\d{2}/.test(line)) {
+      break;
+    }
+
+    if (
+      /^[A-Z0-9]/.test(line) &&
+      !/westpac|statement|balance|minim|account|electronic/i.test(line)
+    ) {
       descriptions.push(line);
     }
   }
 
-  // 2️⃣ Collect date + amount lines
+  // Step 2 — collect date + amount rows
   for (const line of lines) {
-    const match = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{2})\s+([\d,]+\.\d{2})(\s+-)?$/);
+    const match = line.match(
+      /^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{2})\s+([\d,]+\.\d{2})(\s+-)?$/
+    );
+
     if (match) {
-      const dateRaw = match[1];
-      const amountRaw = match[2];
-      const isCredit = !!match[3];
+      const day = match[1].padStart(2, "0");
+      const month = match[2];
+      const year = "20" + match[3];
+      const amountRaw = match[4];
+      const isCredit = !!match[5];
 
+      const months = {
+        Jan: "01", Feb: "02", Mar: "03", Apr: "04",
+        May: "05", Jun: "06", Jul: "07", Aug: "08",
+        Sep: "09", Oct: "10", Nov: "11", Dec: "12"
+      };
+
+      const date = `${year}-${months[month]}-${day}`;
       const amount = parseAmount(amountRaw);
-      const date = normalisePdfDate(dateRaw.replace(/\s+(\d{2})$/, ' 20$1'));
 
-      transactions.push({
+      dateAmountLines.push({
         date,
         amount: isCredit ? -amount : amount
       });
     }
   }
 
-  // 3️⃣ Pair descriptions with transactions by index
-  const final = [];
-  for (let i = 0; i < transactions.length; i++) {
-    final.push({
-      ...transactions[i],
+  // Step 3 — pair by index
+  const txns = [];
+  for (let i = 0; i < dateAmountLines.length; i++) {
+    txns.push({
+      ...dateAmountLines[i],
       description: descriptions[i] || "Unknown"
     });
   }
 
-  return final;
+  return txns;
 }
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];

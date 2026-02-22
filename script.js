@@ -1095,63 +1095,53 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     return `${year}-${months[mon]}-${day.padStart(2,'0')}`;
   }
-
-  function parseWestpacPdfText(text) {
+function parseWestpacPdfText(text) {
   const lines = text
     .split(/\n+/)
     .map(l => l.trim())
     .filter(Boolean);
 
-  const txns = [];
+  const descriptions = [];
+  const transactions = [];
 
-  let curDate = null;
-  let curDesc = [];
-
+  // 1️⃣ Collect descriptions (before the transaction table)
   for (const line of lines) {
-    // 1️⃣ Date line (standalone)
-    const dateMatch = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})$/);
-    if (dateMatch) {
-      curDate = normalisePdfDate(dateMatch[1]);
-      curDesc = [];
-      continue;
-    }
-
-    // 2️⃣ Amount line (standalone)
-    const amtMatch = line.match(/^-?\$?\d+\.\d{2}$/);
-    if (amtMatch && curDate) {
-      let amount = Math.abs(parseAmount(line));
-
-     const description = curDesc.join(' ').trim();
-
-// Skip repayments / payments
-  if (/^PAYMENT[- ]BPAY/i.test(description)) {
-    curDate = null;
-    curDesc = [];
-    continue;
-  }
-
-  txns.push({
-    date: curDate,
-    description,
-    amount
-  });
-
-      curDate = null;
-      curDesc = [];
-      continue;
-    }
-
-    // 3️⃣ Description lines (between date and amount)
-    if (curDate) {
-      // Skip table headers / junk
-      if (/^(withdrawal|deposit|date|description)$/i.test(line)) continue;
-      curDesc.push(line);
+    if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{2}\s+[\d,]+\.\d{2}/.test(line)) break;
+    if (/^[A-Z0-9].{3,}/.test(line) &&
+        !/statement|account|westpac|balance|minimum/i.test(line)) {
+      descriptions.push(line);
     }
   }
 
-  return txns;
+  // 2️⃣ Collect date + amount lines
+  for (const line of lines) {
+    const match = line.match(/^(\d{1,2}\s+[A-Za-z]{3}\s+\d{2})\s+([\d,]+\.\d{2})(\s+-)?$/);
+    if (match) {
+      const dateRaw = match[1];
+      const amountRaw = match[2];
+      const isCredit = !!match[3];
+
+      const amount = parseAmount(amountRaw);
+      const date = normalisePdfDate(dateRaw.replace(/\s+(\d{2})$/, ' 20$1'));
+
+      transactions.push({
+        date,
+        amount: isCredit ? -amount : amount
+      });
+    }
+  }
+
+  // 3️⃣ Pair descriptions with transactions by index
+  const final = [];
+  for (let i = 0; i < transactions.length; i++) {
+    final.push({
+      ...transactions[i],
+      description: descriptions[i] || "Unknown"
+    });
+  }
+
+  return final;
 }
-
   pdfInput.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;

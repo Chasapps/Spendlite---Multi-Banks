@@ -1077,112 +1077,183 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================================
-// WESTPAC PDF IMPORT (FINAL, SINGLE PATH, WORKING)
+// SECTION 24: UNIVERSAL PDF IMPORT (QUDOS + WESTPAC)
 // ============================================================================
 
 (function () {
+
   const pdfInput = document.getElementById('pdfFile');
   if (!pdfInput || !window.pdfjsLib) return;
 
   pdfjsLib.disableWorker = true;
 
-  function normalisePdfDate(d) {
-    const [day, mon, year] = d.split(' ');
-    const months = {
-      Jan:'01', Feb:'02', Mar:'03', Apr:'04',
-      May:'05', Jun:'06', Jul:'07', Aug:'08',
-      Sep:'09', Oct:'10', Nov:'11', Dec:'12'
-    };
-    return `${year}-${months[mon]}-${day.padStart(2,'0')}`;
+  // ------------------------------------------------------------
+  // Extract text from PDF
+  // ------------------------------------------------------------
+  async function extractPdfText(file) {
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+    let text = "";
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      text += content.items.map(it => it.str).join(" ") + "\n";
+    }
+
+    return text;
   }
 
-function parseWestpacPdfText(text) {
-  const lines = text
-    .split(/\n+/)
-    .map(l => l.trim())
-    .filter(Boolean);
+  // ------------------------------------------------------------
+  // Detect format
+  // ------------------------------------------------------------
+  function detectFormat(text) {
+    if (text.includes("Qudos Bank")) return "QUDOS";
+    if (text.includes("Statement of recent transactions")) return "WESTPAC_SIMPLE";
+    if (text.includes("Date of Transaction")) return "WESTPAC_FULL";
+    return "UNKNOWN";
+  }
 
-  const txns = [];
+  // ------------------------------------------------------------
+  // Westpac Transactions Report (simple)
+  // ------------------------------------------------------------
+  function parseWestpacSimple(text) {
+    const lines = text.split("\n");
+    const txns = [];
 
-  const months = {
-    Jan: "01", Feb: "02", Mar: "03", Apr: "04",
-    May: "05", Jun: "06", Jul: "07", Aug: "08",
-    Sep: "09", Oct: "10", Nov: "11", Dec: "12"
-  };
+    const regex = /(\d{1,2}\s\w+\s\d{4})\s+(.+?)\s+(-?\$?\d+\.\d{2})/;
 
-  for (let i = 0; i < lines.length; i++) {
+    lines.forEach(line => {
+      const m = line.match(regex);
+      if (!m) return;
 
-    const match = lines[i].match(
-      /^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{2})\s+([\d,]+\.\d{2})(\s*-)?$/
-    );
-
-    if (match) {
-      const day = match[1].padStart(2, "0");
-      const month = months[match[2]];
-      const year = "20" + match[3];
-      const amountRaw = match[4];
-      const isCredit = !!match[5];
-
-      const date = `${year}-${month}-${day}`;
-      const amount = parseAmount(amountRaw);
-      const signedAmount = isCredit ? -amount : amount;
+      const dateObj = parseDateSmart(m[1]);
+      if (!dateObj) return;
 
       txns.push({
-        date,
-        amount: signedAmount,
-        description: "TEMP"
+        date: dateObj.toISOString().split("T")[0],
+        description: m[2].trim(),
+        amount: parseAmount(m[3])
       });
-    }
+    });
+
+    return txns;
   }
 
-  const descriptions = lines.filter(l =>
-    /^[A-Z]/.test(l) &&
-    !/Westpac|Account|Balance|Statement|Minimum|Payment|Page|Electronic/i.test(l) &&
-    !/^\d/.test(l)
-  );
+  // ------------------------------------------------------------
+  // Westpac Full Statement
+  // ------------------------------------------------------------
+  function parseWestpacFull(text) {
+    const lines = text.split("\n");
+    const txns = [];
 
-  for (let i = 0; i < txns.length; i++) {
-    txns[i].description = descriptions[i] || "Unknown";
+    const dateRegex = /(\d{1,2}\s\w+\s\d{2})/;
+
+    lines.forEach((line, i) => {
+
+      const dateMatch = line.match(dateRegex);
+      if (!dateMatch) return;
+
+      const amtMatch = line.match(/(\d{1,3}(?:,\d{3})*\.\d{2})/);
+      if (!amtMatch) return;
+
+      const dateObj = parseDateSmart(dateMatch[1]);
+      if (!dateObj) return;
+
+      let amount = parseAmount(amtMatch[1]);
+      if (line.includes("-")) amount = -amount;
+
+      const description = lines[i - 1] ? lines[i - 1].trim() : "";
+
+      txns.push({
+        date: dateObj.toISOString().split("T")[0],
+        description,
+        amount
+      });
+
+    });
+
+    return txns;
   }
 
-  return txns;
-}
+  // ------------------------------------------------------------
+  // Qudos Statement
+  // ------------------------------------------------------------
+  function parseQudos(text) {
+    const txns = [];
+    const lines = text.split("\n");
 
-  pdfInput.addEventListener('change', async (e) => {
+    const yearMatch = text.match(/Statement From .*? (\d{4})/);
+    const year = yearMatch ? yearMatch[1] : new Date().getFullYear();
+
+    const rowRegex = /(\d{1,2}\s\w+)\s+(\d{1,3}(?:,\d{3})*\.\d{2})/;
+
+    lines.forEach((line, i) => {
+
+      const m = line.match(rowRegex);
+      if (!m) return;
+
+      const dateObj = parseDateSmart(m[1] + " " + year);
+      if (!dateObj) return;
+
+      const description = lines[i + 1] ? lines[i + 1].trim() : "";
+
+      txns.push({
+        date: dateObj.toISOString().split("T")[0],
+        description,
+        amount: -parseAmount(m[2])
+      });
+
+    });
+
+    return txns;
+  }
+
+  // ------------------------------------------------------------
+  // Main handler
+  // ------------------------------------------------------------
+  pdfInput.addEventListener("change", async (e) => {
+
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
-      const buffer = new Uint8Array(await file.arrayBuffer());
-      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
 
-      let text = '';
-      for (let p = 1; p <= pdf.numPages; p++) {
-        const page = await pdf.getPage(p);
-        const content = await page.getTextContent();
-        text += content.items.map(it => it.str).join('\n') + '\n';
+      const text = await extractPdfText(file);
+      const format = detectFormat(text);
+
+      let parsed = [];
+
+      if (format === "QUDOS") parsed = parseQudos(text);
+      else if (format === "WESTPAC_SIMPLE") parsed = parseWestpacSimple(text);
+      else if (format === "WESTPAC_FULL") parsed = parseWestpacFull(text);
+      else {
+        alert("Unsupported PDF format.");
+        return;
       }
 
-    console.log('=== PDF TEXT START ===');
-console.log(text.slice(0, 2000));
-console.log('=== PDF TEXT END ===');
+      if (!parsed.length) {
+        alert("No transactions detected.");
+        return;
+      }
 
-const txns = parseWestpacPdfText(text);
-
-if (!txns.length) {
-  alert('No transactions found in PDF');
-  return;
-}
-
-      CURRENT_TXNS = txns;
+      CURRENT_TXNS = parsed.map(t => ({
+        date: t.date,
+        amount: t.amount,
+        description: t.description,
+        category: ""
+      }));
 
       saveTxnsToLocalStorage();
       rebuildMonthDropdown();
       applyRulesAndRender();
 
     } catch (err) {
-      console.error('PDF import failed:', err);
-      alert('Failed to read PDF file');
+      console.error("PDF import failed:", err);
+      alert("Failed to read PDF.");
     }
+
   });
+
 })();

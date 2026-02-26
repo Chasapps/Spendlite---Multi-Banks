@@ -1121,19 +1121,37 @@ function detectFormat(text) {
 function parseWestpacSimple(text) {
   const txns = [];
 
-  const regex = /(\d{1,2}\s\w+\s\d{4})[\s\S]{0,100}?(-?\$?\d+\.\d{2})/g;
+  const dateRegex = /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})/g;
+  const amountRegex = /-?\$?\d+\.\d{2}/g;
 
-  let match;
+  let dateMatch;
+  let amountMatch;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((dateMatch = dateRegex.exec(text)) !== null) {
 
-    const dateObj = parseDateSmart(match[1]);
-    if (!dateObj) continue;
+    const day = dateMatch[1].padStart(2, "0");
+    const month = {
+      Jan:"01", Feb:"02", Mar:"03", Apr:"04",
+      May:"05", Jun:"06", Jul:"07", Aug:"08",
+      Sep:"09", Oct:"10", Nov:"11", Dec:"12"
+    }[dateMatch[2]];
+
+    const year = dateMatch[3];
+
+    const date = `${year}-${month}-${day}`;
+
+    // look ahead for next amount after this date
+    amountRegex.lastIndex = dateRegex.lastIndex;
+    amountMatch = amountRegex.exec(text);
+
+    if (!amountMatch) continue;
+
+    const amount = parseAmount(amountMatch[0]);
 
     txns.push({
-      date: dateObj.toISOString().split("T")[0],
+      date,
       description: "Imported Transaction",
-      amount: parseAmount(match[2])
+      amount
     });
   }
 

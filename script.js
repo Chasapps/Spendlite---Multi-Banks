@@ -1108,38 +1108,37 @@ document.addEventListener('DOMContentLoaded', () => {
   // ------------------------------------------------------------
   // Detect format
   // ------------------------------------------------------------
-  function detectFormat(text) {
-    if (text.includes("Qudos Bank")) return "QUDOS";
-    if (text.includes("Statement of recent transactions")) return "WESTPAC_SIMPLE";
-    if (text.includes("Date of Transaction")) return "WESTPAC_FULL";
-    return "UNKNOWN";
-  }
+function detectFormat(text) {
+  if (/Qudos\s*Bank/i.test(text)) return "QUDOS";
+  if (/Statement\s+of\s+recent\s+transactions/i.test(text)) return "WESTPAC_SIMPLE";
+  if (/Date\s+of\s+Transaction/i.test(text)) return "WESTPAC_FULL";
+  return "UNKNOWN";
+}
 
   // ------------------------------------------------------------
   // Westpac Transactions Report (simple)
   // ------------------------------------------------------------
-  function parseWestpacSimple(text) {
-    const lines = text.split("\n");
-    const txns = [];
+ function parseWestpacSimple(text) {
+  const txns = [];
 
-    const regex = /(\d{1,2}\s\w+\s\d{4})\s+(.+?)\s+(-?\$?\d+\.\d{2})/;
+  const regex = /(\d{1,2}\s\w+\s\d{4})\s+([A-Z0-9\*\-\s\.]+?)\s+(-?\$?\d+\.\d{2})/g;
 
-    lines.forEach(line => {
-      const m = line.match(regex);
-      if (!m) return;
+  let match;
 
-      const dateObj = parseDateSmart(m[1]);
-      if (!dateObj) return;
+  while ((match = regex.exec(text)) !== null) {
 
-      txns.push({
-        date: dateObj.toISOString().split("T")[0],
-        description: m[2].trim(),
-        amount: parseAmount(m[3])
-      });
+    const dateObj = parseDateSmart(match[1]);
+    if (!dateObj) continue;
+
+    txns.push({
+      date: dateObj.toISOString().split("T")[0],
+      description: match[2].trim(),
+      amount: parseAmount(match[3])
     });
-
-    return txns;
   }
+
+  return txns;
+}
 
   // ------------------------------------------------------------
   // Westpac Full Statement

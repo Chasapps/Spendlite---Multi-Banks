@@ -1118,10 +1118,10 @@ function detectFormat(text) {
   // ------------------------------------------------------------
   // Westpac Transactions Report (simple)
   // ------------------------------------------------------------
- function parseWestpacSimple(text) {
+function parseWestpacSimple(text) {
   const txns = [];
 
-  const regex = /(\d{1,2}\s\w+\s\d{4})\s+([A-Z0-9\*\-\s\.]+?)\s+(-?\$?\d+\.\d{2})/g;
+  const regex = /(\d{1,2}\s\w+\s\d{4})[\s\S]{0,100}?(-?\$?\d+\.\d{2})/g;
 
   let match;
 
@@ -1132,14 +1132,13 @@ function detectFormat(text) {
 
     txns.push({
       date: dateObj.toISOString().split("T")[0],
-      description: match[2].trim(),
-      amount: parseAmount(match[3])
+      description: "Imported Transaction",
+      amount: parseAmount(match[2])
     });
   }
 
   return txns;
 }
-
   // ------------------------------------------------------------
   // Westpac Full Statement
   // ------------------------------------------------------------

@@ -1082,10 +1082,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 (function () {
 
-  const pdfInput = document.getElementById('pdfFile');
-  if (!pdfInput || !window.pdfjsLib) return;
+ // ============================================================================
+// SECTION 24: UNIVERSAL PDF IMPORT (QUDOS + WESTPAC)
+// ============================================================================
 
-  pdfjsLib.disableWorker = true;
+document.addEventListener("DOMContentLoaded", () => {
+
+  const pdfInput = document.getElementById("pdfFile");
+
+  if (!pdfInput) return;
+
+  if (!window.pdfjsLib) {
+    console.error("pdfjsLib not loaded");
+    return;
+  }
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
   // ------------------------------------------------------------
   // Extract text from PDF
@@ -1272,4 +1285,4 @@ function parseWestpacSimple(text) {
 
   });
 
-})();
+});
